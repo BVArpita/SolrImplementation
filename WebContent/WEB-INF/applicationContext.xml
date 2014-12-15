@@ -1,0 +1,133 @@
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:security="http://www.springframework.org/schema/security"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:mvc="http://www.springframework.org/schema/mvc"
+	xmlns:task="http://www.springframework.org/schema/task" xmlns:aop="http://www.springframework.org/schema/aop"
+	xmlns:tx="http://www.springframework.org/schema/tx"
+	xsi:schemaLocation="
+   http://www.springframework.org/schema/beans     
+   http://www.springframework.org/schema/beans/spring-beans-3.0.xsd
+   http://www.springframework.org/schema/context 
+   http://www.springframework.org/schema/context/spring-context-3.0.xsd
+   http://www.springframework.org/schema/aop     
+   http://www.springframework.org/schema/aop/spring-aop-3.0.xsd
+   http://www.springframework.org/schema/task 
+   http://www.springframework.org/schema/task/spring-task-3.0.xsd
+   http://www.springframework.org/schema/tx
+   http://www.springframework.org/schema/tx/spring-tx-3.0.xsd">
+	<tx:advice id="txAdvice" transaction-manager="transactionManager">
+		<tx:attributes>
+			<!-- all methods starting with 'get' are read-only -->
+			<tx:method name="get*" read-only="true" />
+			<!-- other methods use the default transaction settings (see below) -->
+			<tx:method name="*" propagation="REQUIRED" />
+		</tx:attributes>
+	</tx:advice>
+	<aop:config>
+		<aop:pointcut id="allDaoMethods" expression="execution(* com.dao.*.*(..))" />
+		<aop:advisor advice-ref="txAdvice" pointcut-ref="allDaoMethods" />
+	</aop:config>
+
+	<bean id="transactionManager"
+		class="org.springframework.orm.hibernate3.HibernateTransactionManager">
+		<property name="sessionFactory" ref="sessionFactory" />
+	</bean>
+	<bean id="sessionFactory"
+		class="org.springframework.orm.hibernate3.LocalSessionFactoryBean">
+		<property name="dataSource">
+			<ref bean="myDataSource" />
+		</property>
+		<property name="mappingResources">
+			<list>
+				<value>/com/bean/bean.hbm.xml
+				</value>
+			</list>
+		</property>
+		<property name="hibernateProperties">
+			<props>
+				<prop key="hibernate.dialect">org.hibernate.dialect.MySQLDialect</prop>
+				<prop key="hibernate.show_sql">false</prop>
+				<prop key="hibernate.hbm2ddl.auto">update</prop>
+				<prop key="hibernate.connection.release_mode">auto</prop>
+				<prop key="hibernate.connection.pool_size">2</prop>
+				<prop key="hibernate.sql.enforce_strict_size">true</prop>
+			</props>
+		</property>
+	</bean>
+
+	<bean id="myDataSource" class="org.apache.commons.dbcp.BasicDataSource"
+		destroy-method="close">
+		<property name="driverClassName" value="${driver}">
+		</property>
+		<property name="url" value="${url}">
+		</property>
+		<property name="username" value="${username}"></property>
+		<property name="password" value="${password}">
+		</property>
+		<property name="maxActive">
+			<value>2</value>
+		</property>
+	</bean>
+	<bean id="servicePropertyConfig"
+		class="org.springframework.beans.factory.config.PropertyPlaceholderConfigurer">
+		<property name="locations">
+			<list>
+				<value>classpath:com/properties/database.properties
+				</value>
+				<value>classpath:com/properties/mailproperty.properties</value>
+
+			</list>
+		</property>
+		<property name="placeholderPrefix" value="${" />
+	</bean>
+
+	<!-- Mail configuration -->
+
+	<bean id="mailSender" class="org.springframework.mail.javamail.JavaMailSenderImpl">
+		<property name="host" value="smtp.gmail.com" />
+		<property name="username" value="${from.mail}" />
+		<property name="password" value="${password.mail}" />
+		<property name="javaMailProperties">
+			<props>
+				<prop key="mail.smtp.auth">true</prop>
+				<!-- used by gmail smtp server -->
+				<prop key="mail.smtp.starttls.enable">true</prop>
+			</props>
+		</property>
+	</bean>
+	<!-- this is a template message that we can pre-load with default state -->
+	<bean id="templateMessage" class="org.springframework.mail.SimpleMailMessage">
+		<property name="from" value="${from.mail}" />
+		<property name="subject" value="${login.massage}" />
+	</bean>
+	<bean id="taskExecutor"
+		class="org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor">
+		<property name="corePoolSize" value="5" />
+		<property name="maxPoolSize" value="10" />
+		<property name="queueCapacity" value="25" /> <!-- this is maximam number of threads can be created for on object from 
+			pool -->
+	</bean>
+	<bean id="taskExecutorManager" class="com.backend.task.TaskExecutorManager">
+		<constructor-arg ref="taskExecutor" />
+		<constructor-arg ref="mailManager" />
+	</bean>
+	<bean id="mailManager" class="com.backend.mailmanager.MailManager">
+		<property name="mailSender" ref="mailSender" />
+		<property name="templateMessage" ref="templateMessage" />
+	</bean>
+	<!--End Mail configuration -->
+
+	<bean name="backEnddao" class="com.dao.BackEndDao">
+		<property name="sessionFactory" ref="sessionFactory">
+		</property>
+	</bean>
+
+	<task:scheduler id="documentScheduler" pool-size="5" />
+	<task:scheduled-tasks scheduler="documentScheduler">
+		<task:scheduled ref="documentSave" method="demoServiceMethod"
+			fixed-delay="2000" />
+	</task:scheduled-tasks>
+	<bean id="documentSave" class="com.scheduler.DocumentSave">
+		
+	</bean>
+</beans>
